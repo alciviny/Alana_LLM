@@ -129,6 +129,9 @@ data/
 *.pdf
 *.pkl
 *.pickle
+# Ignorar dados locais do Qdrant
+qdrant_data/
+
 
 # models
 models/
