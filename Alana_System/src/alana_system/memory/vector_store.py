@@ -211,6 +211,7 @@ class VectorStore:
         Busca semântica por similaridade vetorial.
         Retorna texto, score e metadados.
         """
+        # Validação de dimensão
         if len(query_vector) != self.vector_dim:
             raise ValueError(
                 f"Dimensão inválida do query_vector | "
@@ -218,17 +219,21 @@ class VectorStore:
                 f"recebido={len(query_vector)}"
             )
 
-        results = self.client.search(
+        # CORREÇÃO AQUI: Usamos query_points em vez de search
+        response = self.client.query_points(
             collection_name=self.collection_name,
-            query_vector=query_vector.tolist(),
+            query=query_vector.tolist(),
             limit=top_k,
             query_filter=filters,
             score_threshold=score_threshold,
         )
 
-        response: List[Dict[str, Any]] = []
+        # O resultado agora vem dentro da propriedade .points
+        results = response.points
+
+        response_list: List[Dict[str, Any]] = []
         for r in results:
-            response.append(
+            response_list.append(
                 {
                     "score": r.score,
                     "chunk_id": r.payload.get("original_id"),
@@ -237,7 +242,7 @@ class VectorStore:
                 }
             )
 
-        return response
+        return response_list
 
     # ------------------------------------------------------------------
     # Utils

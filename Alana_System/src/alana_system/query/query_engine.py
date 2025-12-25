@@ -22,8 +22,8 @@ from typing import List, Dict, Any
 
 import numpy as np
 
-from src.embedding.embedder import TextEmbedder
-from src.memory.vector_store import VectorStore
+from alana_system.embeddings.embedder import TextEmbedder
+from alana_system.memory.vector_store import VectorStore
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,7 @@ class QueryEngine:
         embedder: TextEmbedder,
         vector_store: VectorStore,
         top_k: int = 5,
-        score_threshold: float = 0.0,
+        score_threshold: float = 0.30,
         max_context_chars: int = 4000,
     ):
         self.embedder = embedder
