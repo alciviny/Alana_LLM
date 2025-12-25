@@ -19,7 +19,7 @@ from typing import List
 import logging
 import re
 
-from src.ingestion.text_extractor import PageText
+from .text_extractor import PageText
 
 logger = logging.getLogger(__name__)
 
