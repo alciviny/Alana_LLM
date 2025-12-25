@@ -140,6 +140,24 @@ class TextEmbedder:
     # =========================================================
     # Helpers
     # =========================================================
+        # --------------------------------------------------------
+    # Query Embedding
+    # --------------------------------------------------------
+
+    def embed_query(self, text: str) -> np.ndarray:
+        """
+        Gera embedding otimizado para consultas (queries).
+
+        Separar query de documento permite:
+        - ajustes futuros (ex: prefixos tipo 'query:')
+        - trocar backend sem quebrar a QueryEngine
+        """
+        return self.model.encode(
+            text,
+            convert_to_numpy=True,
+            normalize_embeddings=True,
+            show_progress_bar=False,
+        )
 
     @staticmethod
     def _batch_generator(
