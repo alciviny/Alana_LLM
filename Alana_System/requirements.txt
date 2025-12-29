@@ -12,3 +12,8 @@ python-json-logger
 
 # Configuration
 python-dotenv
+
+llama-cpp-python
+
+# Model Downloading
+huggingface-hub[cli]
