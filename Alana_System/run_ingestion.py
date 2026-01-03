@@ -2,13 +2,18 @@ import logging
 import time
 from pathlib import Path
 from typing import List
+import sys
+
+# Adiciona o diretório 'src' ao sys.path para encontrar o pacote 'alana_system'
+src_path = Path(__file__).resolve().parent / 'src'
+sys.path.insert(0, str(src_path))
 
 from alana_system.ingestion.pdf_loader import PDFLoader
 from alana_system.ingestion.text_extractor import PDFTextExtractor, PageText
 from alana_system.ingestion.audio_loader import AudioLoader
 from alana_system.ingestion.audio_transcriber import AudioTranscriber
 
-from alana_system.preprocessing.cleaner import TextCleaner
+from alana_system.ingestion.cleaner import TextCleaner
 from alana_system.preprocessing.chunker import TextChunker
 from alana_system.embeddings.embedder import TextEmbedder
 from alana_system.memory.vector_store import VectorStore

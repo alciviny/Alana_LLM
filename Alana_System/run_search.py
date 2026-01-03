@@ -6,8 +6,9 @@ from typing import List, Dict, Any
 # =========================================================
 # PATH SETUP
 # =========================================================
-# Adiciona o diretório 'src' ao path para importar os módulos internos
-sys.path.append(str(Path(__file__).parent / "src"))
+# Adiciona o diretório 'src' ao sys.path para encontrar o pacote 'alana_system'
+src_path = Path(__file__).resolve().parent / 'src'
+sys.path.insert(0, str(src_path))
 
 from alana_system.embeddings.embedder import TextEmbedder
 from alana_system.memory.vector_store import VectorStore
@@ -24,16 +25,17 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # =========================================================
-# TOKEN CONTROL (SIMPLIFICADO E SEGURO)
+# TOKEN CONTROL (CORRIGIDO E ROBUSTO)
 # =========================================================
 def estimate_tokens(text: str) -> int:
     """
-    Estimativa simples e estável:
-    ~1 token ≈ 1 palavra (bom o suficiente para controle local)
+    Estimativa mais segura para Llama 3 / Português.
+    Multiplicador 1.7 cobre a maioria dos casos onde 1 palavra > 1 token.
     """
     if not text:
         return 0
-    return len(text.split())
+    # Aumentamos o peso de cada palavra para evitar estouros
+    return int(len(text.split()) * 1.7)
 
 
 def truncate_context_by_budget(
@@ -41,34 +43,58 @@ def truncate_context_by_budget(
     max_tokens: int
 ) -> str:
     """
-    Junta os melhores contextos respeitando o orçamento máximo de tokens.
-    Extrai o texto corretamente do dicionário e adiciona metadados (página).
+    Junta os contextos. Se um bloco for maior que o espaço restante,
+    ele é CORTADO para caber, em vez de estourar o erro.
     """
     selected_blocks = []
     used_tokens = 0
 
     for item in contexts:
-        # 1. Extrair o texto e página do dicionário (Correção do Bug)
         text = item.get("text", "")
         page = item.get("page_number", "?")
         
-        # 2. Formatar o bloco para a IA saber a origem
-        formatted_block = f"--- [Página {page}] ---\n{text}"
+        # Cabeçalho ocupa tokens também
+        header = f"--- [Fonte/Pág {page}] ---\n"
+        header_tokens = estimate_tokens(header)
         
-        # 3. Calcular tokens deste bloco específico
-        block_tokens = estimate_tokens(formatted_block)
-
-        # 4. Verificar se cabe no orçamento
-        if used_tokens + block_tokens > max_tokens:
-            logger.info(f"🛑 Orçamento atingido. Ignorando trechos restantes.")
+        # Quanto sobra para o texto neste momento?
+        remaining_tokens = max_tokens - used_tokens - header_tokens
+        
+        if remaining_tokens <= 0:
+            logger.info("🛑 Orçamento esgotado. Parando aqui.")
             break
 
-        selected_blocks.append(formatted_block)
-        used_tokens += block_tokens
+        # Calcula tokens do texto completo
+        text_tokens = estimate_tokens(text)
+        
+        if text_tokens > remaining_tokens:
+            # --- CORTE INTELIGENTE ---
+            # Se o texto é maior que o espaço, cortamos ele proporcionalmente
+            logger.warning(f"⚠️ Cortando trecho gigante (Pág {page}) para caber no contexto.")
+            
+            # Regra de 3 inversa aproximada: se X palavras = Y tokens, quantas palavras cabem em remaining?
+            # Usamos 1.7 como fator.
+            safe_word_count = int(remaining_tokens / 1.7)
+            words = text.split()
+            
+            # Reconstrói o texto cortado
+            truncated_text = " ".join(words[:safe_word_count]) + "... [CORTADO PELO SISTEMA]"
+            
+            formatted_block = header + truncated_text
+            selected_blocks.append(formatted_block)
+            
+            # O orçamento encheu, então paramos
+            used_tokens += header_tokens + estimate_tokens(truncated_text)
+            break
+        else:
+            # Cabe inteiro
+            formatted_block = header + text
+            selected_blocks.append(formatted_block)
+            used_tokens += header_tokens + text_tokens
 
     logger.info(
-        f"🧮 Contexto final montado: {used_tokens}/{max_tokens} tokens "
-        f"({len(selected_blocks)} trechos utilizados)"
+        f"🧮 Contexto final montado: ~{used_tokens}/{max_tokens} tokens (estimado) "
+        f"({len(selected_blocks)} blocos usados)"
     )
 
     return "\n\n".join(selected_blocks)

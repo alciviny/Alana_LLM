@@ -76,8 +76,9 @@ class TextChunker:
         page: CleanedPageText
     ) -> List[TextChunk]:
         """
-        Chunking robusto de uma única página.
+        Chunking robusto com suporte a textos contínuos (Audio/OCR).
         """
+        # 1. Tenta dividir por parágrafos naturais
         paragraphs = self._split_paragraphs(page.text)
         chunks: List[TextChunk] = []
 
@@ -90,75 +91,92 @@ class TextChunker:
             para_len = len(para)
 
             # =================================================
-            # CASO CRÍTICO: Parágrafo gigante (> max_chars)
+            # CASO CRÍTICO: Parágrafo gigante (Whisper/OCR ruim)
             # =================================================
             if para_len > self.max_chars:
-                # Se houver algo pendente no buffer, commita antes
+                # Se tem buffer pendente, salva ele antes
                 if current_paras:
-                    self._commit_chunk(
-                        chunks,
-                        current_paras,
-                        page.page_number
-                    )
+                    self._commit_chunk(chunks, current_paras, page.page_number)
                     current_paras = []
                     current_len = 0
 
-                logger.warning(
-                    f"Parágrafo excede max_chars (chunk forçado) | "
-                    f"pagina={page.page_number} | chars={para_len}"
+                logger.info(
+                    f"🔪 Fatiando bloco gigante | pagina={page.page_number} | chars={para_len}"
                 )
-
-                chunks.append(
-                    self._build_chunk(
-                        para,
-                        page.page_number
-                    )
-                )
+                
+                # --- NOVA LÓGICA: FATIAMENTO FORÇADO ---
+                # Divide o textão em fatias menores que respeitam max_chars
+                sub_blocks = self._split_text_by_limit(para, self.max_chars, self.overlap_chars)
+                
+                for block in sub_blocks:
+                    chunks.append(self._build_chunk(block, page.page_number))
+                
                 i += 1
                 continue
 
             # =================================================
-            # FLUXO NORMAL
+            # FLUXO NORMAL (mantido igual)
             # =================================================
             added_len = para_len + (2 if current_paras else 0)
 
-            # Cabe no buffer atual
             if current_len + added_len <= self.max_chars:
                 current_paras.append(para)
                 current_len += added_len
                 i += 1
             else:
-                # Chunk cheio → commit
-                committed = self._commit_chunk(
-                    chunks,
-                    current_paras,
-                    page.page_number
-                )
-
-                # Overlap semântico SÓ se o chunk foi realmente commitado
+                committed = self._commit_chunk(chunks, current_paras, page.page_number)
                 if committed:
                     current_paras, current_len = self._build_overlap(current_paras)
                 else:
-                    # Se o buffer foi descartado, o overlap também é descartado.
-                    # Começa do zero para evitar que o parágrafo atual se junte
-                    # a um resto de buffer descartado.
                     current_paras = []
                     current_len = 0
 
-                # NÃO incrementa i:
-                # o parágrafo atual será tentado no próximo ciclo
-
-        # =====================================================
         # Commit final
-        # =====================================================
         if current_paras:
-            self._commit_chunk(
-                chunks,
-                current_paras,
-                page.page_number
-            )
+            self._commit_chunk(chunks, current_paras, page.page_number)
 
         return chunks
+
+    # --------------------------------------------------------
+    # NOVO MÉTODO AUXILIAR
+    # --------------------------------------------------------
+    def _split_text_by_limit(self, text: str, limit: int, overlap: int) -> List[str]:
+        """
+        Fatia um texto contínuo em blocos de tamanho fixo com overlap.
+        Versão corrigida para evitar loop infinito em trechos finais curtos.
+        """
+        blocks = []
+        start = 0
+        text_len = len(text)
+
+        while start < text_len:
+            # Define o fim ideal
+            end = min(start + limit, text_len)
+            
+            # Ajuste inteligente: tenta não cortar no meio da palavra
+            if end < text_len:
+                last_space = text.rfind(' ', start, end)
+                if last_space != -1 and last_space > start:
+                    end = last_space
+
+            # Extrai o bloco
+            block = text[start:end].strip()
+            if block:
+                blocks.append(block)
+            
+            # --- CORREÇÃO DO LOOP INFINITO ---
+            # Calcula o próximo início recuando pelo overlap
+            next_start = end - overlap
+
+            # Se o recuo fizer a gente ficar no mesmo lugar (ou voltar), 
+            # forçamos o avanço para o fim do bloco atual.
+            # Isso acontece quando o bloco é menor que o overlap (final do texto).
+            if next_start <= start:
+                next_start = end
+            
+            start = next_start
+
+        return blocks
 
     # =========================================================
     # Helpers
