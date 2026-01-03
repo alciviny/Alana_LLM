@@ -23,7 +23,7 @@ def single_page():
         "Primeiro parágrafo do texto. Ele é curto e direto.\n\n"
         "Segundo parágrafo é um pouco mais longo, com mais detalhes. "
         "Ele serve para testar a junção de parágrafos em um único chunk.\n\n"
-        "Terceiro. Este é bem curto.\n\n"
+        "Terceiro. Curto.\n\n"
         "Quarto parágrafo é deliberadamente muito, muito, muito longo para exceder o limite "
         "de caracteres de cem, forçando o chunker a tratá-lo como um caso especial e isolado."
     )
