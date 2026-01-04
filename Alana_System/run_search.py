@@ -138,7 +138,7 @@ def main():
     print("📚 Inicializando memória vetorial...")
     
     # Embedder: Transforma texto em números
-    embedder = TextEmbedder(device="cpu")
+    embedder = TextEmbedder(device="cuda")
 
     # Vector Store: Banco de dados Qdrant
     vector_store = VectorStore(
