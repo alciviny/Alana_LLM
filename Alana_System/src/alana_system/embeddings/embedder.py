@@ -73,7 +73,7 @@ class TextEmbedder:
             if torch and torch.cuda.is_available():
                 device = "cuda"
             else:
-                device = "cpu"
+                device = "cuda"
 
         logger.info(
             f"Carregando modelo de embedding | "
