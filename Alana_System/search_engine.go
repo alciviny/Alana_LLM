@@ -53,7 +53,8 @@ type GenerateResponse struct {
 	Answer string `json:"answer"`
 }
 
-const sidecarURL = "http://localhost:8000"
+// AJUSTE: Forçando IPv4 para evitar erros de conexão no Windows (::1)
+const sidecarURL = "http://127.0.0.1:8000"
 
 // getEmbedding chama o endpoint /embed do sidecar
 func getEmbedding(ctx context.Context, query string) ([]float32, error) {
@@ -153,8 +154,8 @@ func (e *AlanaEngine) Search(
 	ctx, cancel := context.WithTimeout(ctx, e.timeout)
 	defer cancel()
 
-	// Cria conexão gRPC direta ao Qdrant (evita depender de métodos não expostos do cliente)
-	conn, err := grpc.DialContext(ctx, "localhost:6334", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	// AJUSTE: Forçando IPv4 (127.0.0.1) para a conexão gRPC direta ao Qdrant
+	conn, err := grpc.DialContext(ctx, "127.0.0.1:6334", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to dial qdrant: %w", err)
 	}
@@ -241,8 +242,9 @@ func (e *AlanaEngine) AssembleContext(
 func main() {
 	ctx := context.Background()
 
+	// AJUSTE: Forçando IPv4 no host do QdrantClient
 	qdrantClient, err := qdrant.NewClient(&qdrant.Config{
-		Host: "localhost",
+		Host: "127.0.0.1",
 		Port: 6334,
 	})
 	if err != nil {

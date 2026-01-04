@@ -45,7 +45,7 @@ logger.info("Iniciando o Python Sidecar para o Alana System...")
 
 # --- Configurações ---
 # Use as mesmas configurações do seu script run_search.py
-MODEL_PATH = "Alana_System/models/Meta-Llama-3-8B-Instruct-Q4_K_M.gguf"
+MODEL_PATH = "models/Meta-Llama-3-8B-Instruct-Q4_K_M.gguf"
 EMBEDDER_DEVICE = "cuda" # "cuda" para GPU, "cpu" para CPU
 LLM_GPU_LAYERS = -1      # -1 para usar o máximo da GPU, 0 para CPU
 
@@ -116,3 +116,8 @@ async def health_check():
     return {"status": "ok", "message": "Alana Sidecar está operacional."}
 
 logger.info("🚀 Servidor FastAPI pronto para receber requisições em http://localhost:8000")
+
+if __name__ == "__main__":
+    import uvicorn
+    # Isso manterá o servidor rodando e ouvindo na porta 8000
+    uvicorn.run(app, host="127.0.0.1", port=8000)
