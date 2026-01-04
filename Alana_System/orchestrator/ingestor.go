@@ -29,7 +29,8 @@ func main() {
 		cancel()
 	}()
 
-	rawDir := "./Alana_System/data/raw"
+	// AJUSTE: Caminho relativo para quem está dentro de Alana_System
+	rawDir := "./data/raw" 
 	numWorkers := 4
 
 	tasks := make(chan Task, 100)
@@ -98,9 +99,10 @@ func discoverFiles(ctx context.Context, root string, tasks chan<- Task) error {
 func processTask(workerID int, task Task) {
 	fmt.Printf("[Worker %d] Processando %s: %s\n", workerID, task.Type, task.Path)
 
-	alanaSystemDir := "Alana_System"
+	// AJUSTE: O diretório de trabalho agora é o atual (.)
+	alanaSystemDir := "." 
 
-	// Torna o caminho do arquivo relativo ao diretório Alana_System
+	// Torna o caminho do arquivo relativo ao diretório atual
 	relativePath, err := filepath.Rel(alanaSystemDir, task.Path)
 	if err != nil {
 		fmt.Printf("[Worker %d] Erro ao criar caminho relativo: %v\n", workerID, err)
@@ -109,18 +111,20 @@ func processTask(workerID int, task Task) {
 
 	cmd := exec.Command(
 		"python",
-		"processor.py", // O script está na raiz do novo CWD
+		"processor.py", 
 		"--type", task.Type,
-		"--path", relativePath, // Passa o caminho relativo
+		"--path", relativePath,
 	)
-	cmd.Dir = alanaSystemDir // Define o diretório de trabalho
+	cmd.Dir = alanaSystemDir 
 
 	output, err := cmd.CombinedOutput()
+	
+	// AJUSTE: Mostrar sempre a saída do Python para debug (ajuda a ver o progresso do Whisper)
+	if len(output) > 0 {
+		fmt.Printf("[Worker %d] Saída do Python:\n%s\n", workerID, string(output))
+	}
+
 	if err != nil {
-		fmt.Printf("[Worker %d] Erro: %v\n", workerID, err)
-		fmt.Printf("[Worker %d] Saída do script:\n%s\n", workerID, string(output))
-	} else {
-		// Opcional: Imprimir a saída do script em caso de sucesso
-		// fmt.Printf("[Worker %d] Saída: %s\n", workerID, string(output))
+		fmt.Printf("[Worker %d] Erro crítico no Worker: %v\n", workerID, err)
 	}
 }
