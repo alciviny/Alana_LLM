@@ -12,7 +12,7 @@ from run_ingestion import IngestionPipeline
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--type", required=True, choices=["PDF", "Audio"])
+    parser.add_argument("--type", required=True, choices=["PDF", "Audio", "Note"])
     parser.add_argument("--path", required=True)
     args = parser.parse_args()
 
@@ -33,6 +33,11 @@ def main():
         print(f"--- Processando Áudio: {path.name} ---")
         pages = pipeline.audio_transcriber.transcribe(path)
         pipeline._process_pages(pages, path.name, source="audio")
+
+    elif args.type == "Note":
+        print(f"--- Processando Nota: {path.name} ---")
+        pages = pipeline.note_extractor.extract(path)
+        pipeline._process_pages(pages, path.name, source="note")
 
 if __name__ == "__main__":
     main()
