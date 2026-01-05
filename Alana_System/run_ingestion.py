@@ -56,7 +56,8 @@ class IngestionPipeline:
         self.embedder = TextEmbedder(device=embedder_device)
         self.vector_store = VectorStore(
             collection_name=collection_name,
-            path="./qdrant_data"
+            host="localhost",
+            port=6333
         )
 
     # =========================================================
