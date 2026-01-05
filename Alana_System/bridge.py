@@ -18,6 +18,8 @@ sys.path.insert(0, str(src_path))
 
 from fastapi import FastAPI
 from pydantic import BaseModel
+from typing import List
+from sentence_transformers import CrossEncoder
 
 try:
     from alana_system.embeddings.embedder import TextEmbedder
@@ -47,6 +49,7 @@ logger.info("Iniciando o Python Sidecar para o Alana System...")
 # Use as mesmas configurações do seu script run_search.py
 MODEL_PATH = "models/Meta-Llama-3-8B-Instruct-Q4_K_M.gguf"
 EMBEDDER_DEVICE = "cuda" # "cuda" para GPU, "cpu" para CPU
+RERANKER_DEVICE = "cuda" # "cuda" para GPU, "cpu" para CPU
 LLM_GPU_LAYERS = -1      # -1 para usar o máximo da GPU, 0 para CPU
 
 # --- Carregamento dos Modelos ---
@@ -57,6 +60,18 @@ try:
     logger.info("✅ Modelo de embedding carregado.")
 except Exception as e:
     logger.exception("❌ Falha crítica ao carregar o TextEmbedder.")
+    sys.exit(1)
+
+try:
+    logger.info("Carregando modelo de Re-ranking (Cross-Encoder)...")
+    # Modelo leve e rápido, ideal para reclassificação
+    reranker = CrossEncoder(
+        'cross-encoder/ms-marco-MiniLM-L-6-v2',
+        device=RERANKER_DEVICE
+    )
+    logger.info("✅ Modelo de Re-ranking carregado.")
+except Exception as e:
+    logger.exception("❌ Falha crítica ao carregar o CrossEncoder (Re-ranker).")
     sys.exit(1)
 
 try:
@@ -76,8 +91,8 @@ except Exception as e:
 # =========================================================
 app = FastAPI(
     title="Alana System - Python Sidecar",
-    description="Servidor para realizar embedding e geração de texto com modelos pré-carregados.",
-    version="1.0.0"
+    description="Servidor para realizar embedding, re-ranking e geração de texto com modelos pré-carregados.",
+    version="1.1.0" # Versão atualizada
 )
 
 # --- Definição dos Schemas (Contratos da API) ---
@@ -86,6 +101,13 @@ class EmbedRequest(BaseModel):
 
 class EmbedResponse(BaseModel):
     vector: list[float]
+
+class RerankRequest(BaseModel):
+    query: str
+    documents: List[str]
+
+class RerankResponse(BaseModel):
+    scores: List[float]
 
 class GenerateRequest(BaseModel):
     query: str
@@ -102,6 +124,19 @@ async def get_embedding(req: EmbedRequest):
     vector = embedder.embed_query(req.text)
     return {"vector": vector.tolist()}
 
+@app.post("/rerank", response_model=RerankResponse)
+async def rerank_documents(req: RerankRequest):
+    """
+    Re-ranqueia uma lista de documentos com base na relevância para a query,
+    usando um modelo Cross-Encoder.
+    """
+    logger.info(f"Recebido pedido de re-ranking para query: '{req.query[:50]}...'")
+    # O Cross-Encoder espera uma lista de pares: [[query, doc1], [query, doc2], ...]
+    pairs = [[req.query, doc] for doc in req.documents]
+    scores = reranker.predict(pairs)
+    logger.info(f"Re-ranking concluído para {len(req.documents)} documentos.")
+    return {"scores": scores.tolist()}
+
 @app.post("/generate", response_model=GenerateResponse)
 async def generate_answer(req: GenerateRequest):
     """Gera uma resposta com base em uma query e um contexto."""
@@ -114,6 +149,7 @@ async def health_check():
     """Verifica se o servidor e os modelos estão operacionais."""
     # Uma verificação simples; poderia ser estendida para testar os modelos
     return {"status": "ok", "message": "Alana Sidecar está operacional."}
+
 
 logger.info("🚀 Servidor FastAPI pronto para receber requisições em http://localhost:8000")
 

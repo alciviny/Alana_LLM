@@ -40,6 +40,7 @@ class EmbeddedChunk:
     chunk_id: str
     page_number: int
     text: str
+    source_name: str
     embedding: np.ndarray
 
 
@@ -117,6 +118,7 @@ class TextEmbedder:
                         chunk_id=chunk.chunk_id,
                         page_number=chunk.page_number,
                         text=chunk.text,
+                        source_name=chunk.source_name,
                         embedding=emb,
                     )
                 )

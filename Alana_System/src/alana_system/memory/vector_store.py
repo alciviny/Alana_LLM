@@ -70,6 +70,16 @@ class VectorStore:
 
         self._ensure_collection()
 
+        # Ativa o Full-Text Search no campo de texto
+        self.create_payload_index(
+            field_name="text",
+            field_type="text"
+        )
+        self.create_payload_index(
+            field_name="file_name",
+            field_type="keyword"
+        )
+
     # ------------------------------------------------------------------
     # Collection lifecycle
     # ------------------------------------------------------------------
@@ -175,6 +185,7 @@ class VectorStore:
                     "original_id": chunk.chunk_id,
                     "page_number": chunk.page_number,
                     "text": chunk.text,
+                    "file_name": chunk.source_name,
                 }
 
                 points.append(
@@ -239,6 +250,7 @@ class VectorStore:
                     "chunk_id": r.payload.get("original_id"),
                     "page_number": r.payload.get("page_number"),
                     "text": r.payload.get("text"),
+                    "file_name": r.payload.get("file_name"),
                 }
             )
 
