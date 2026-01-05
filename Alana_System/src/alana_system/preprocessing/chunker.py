@@ -26,6 +26,7 @@ class TextChunk:
     page_number: int
     text: str
     char_count: int
+    source_name: str
 
 
 # ============================================================ 
@@ -55,7 +56,8 @@ class TextChunker:
 
     def chunk_pages(
         self,
-        pages: List[CleanedPageText]
+        pages: List[CleanedPageText],
+        source_name: str
     ) -> List[TextChunk]:
         """
         Processa múltiplas páginas já limpas.
@@ -63,7 +65,7 @@ class TextChunker:
         chunks: List[TextChunk] = []
 
         for page in pages:
-            page_chunks = self._chunk_single_page(page)
+            page_chunks = self._chunk_single_page(page, source_name)
             chunks.extend(page_chunks)
 
         logger.info(f"Chunking finalizado | total_chunks={len(chunks)}")
@@ -73,7 +75,8 @@ class TextChunker:
 
     def _chunk_single_page(
         self,
-        page: CleanedPageText
+        page: CleanedPageText,
+        source_name: str
     ) -> List[TextChunk]:
         """
         Chunking robusto com suporte a textos contínuos (Audio/OCR).
@@ -96,7 +99,7 @@ class TextChunker:
             if para_len > self.max_chars:
                 # Se tem buffer pendente, salva ele antes
                 if current_paras:
-                    self._commit_chunk(chunks, current_paras, page.page_number)
+                    self._commit_chunk(chunks, current_paras, page.page_number, source_name)
                     current_paras = []
                     current_len = 0
 
@@ -109,7 +112,7 @@ class TextChunker:
                 sub_blocks = self._split_text_by_limit(para, self.max_chars, self.overlap_chars)
                 
                 for block in sub_blocks:
-                    chunks.append(self._build_chunk(block, page.page_number))
+                    chunks.append(self._build_chunk(block, page.page_number, source_name))
                 
                 i += 1
                 continue
@@ -124,7 +127,7 @@ class TextChunker:
                 current_len += added_len
                 i += 1
             else:
-                committed = self._commit_chunk(chunks, current_paras, page.page_number)
+                committed = self._commit_chunk(chunks, current_paras, page.page_number, source_name)
                 if committed:
                     current_paras, current_len = self._build_overlap(current_paras)
                 else:
@@ -133,7 +136,7 @@ class TextChunker:
 
         # Commit final
         if current_paras:
-            self._commit_chunk(chunks, current_paras, page.page_number)
+            self._commit_chunk(chunks, current_paras, page.page_number, source_name)
 
         return chunks
 
@@ -213,7 +216,8 @@ class TextChunker:
         self,
         chunks: List[TextChunk],
         paragraphs: List[str],
-        page_number: int
+        page_number: int,
+        source_name: str
     ) -> bool:
         """
         Valida e adiciona chunk à lista final.
@@ -230,7 +234,8 @@ class TextChunker:
         chunks.append(
             self._build_chunk(
                 text_block,
-                page_number
+                page_number,
+                source_name
             )
         )
         return True
@@ -238,18 +243,20 @@ class TextChunker:
     @staticmethod
     def _build_chunk(
         text: str,
-        page_number: int
+        page_number: int,
+        source_name: str
     ) -> TextChunk:
         """
         Cria um chunk determinístico com hash estável.
         """
         chunk_id = hashlib.sha256(
-            f"{page_number}:{text}".encode("utf-8")
+            f"{source_name}:{page_number}:{text}".encode("utf-8")
         ).hexdigest()
 
         return TextChunk(
             chunk_id=chunk_id,
             page_number=page_number,
             text=text,
-            char_count=len(text)
+            char_count=len(text),
+            source_name=source_name
         )

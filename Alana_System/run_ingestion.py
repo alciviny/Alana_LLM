@@ -123,7 +123,7 @@ class IngestionPipeline:
         cleaned_pages = self.cleaner.clean_pages(raw_pages)
 
         # 2. Chunking
-        chunks = self.chunker.chunk_pages(cleaned_pages)
+        chunks = self.chunker.chunk_pages(cleaned_pages, doc_name)
 
         # 3. Embedding
         embedded_chunks = self.embedder.embed_chunks(chunks)
