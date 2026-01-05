@@ -90,6 +90,8 @@ func discoverFiles(ctx context.Context, root string, tasks chan<- Task) error {
 			tasks <- Task{Path: path, Type: "PDF"}
 		case ".mp3", ".wav", ".m4a":
 			tasks <- Task{Path: path, Type: "Audio"}
+		case ".txt", ".md":
+			tasks <- Task{Path: path, Type: "Note"}
 		}
 
 		return nil

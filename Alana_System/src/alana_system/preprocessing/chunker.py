@@ -81,6 +81,17 @@ class TextChunker:
         """
         Chunking robusto com suporte a textos contínuos (Audio/OCR).
         """
+        # Otimização: Se o texto da página inteira já for pequeno o suficiente,
+        # trate-o como um único chunk e retorne.
+        if len(page.text) <= self.max_chars:
+            if len(page.text) >= self.min_chars:
+                chunk = self._build_chunk(page.text, page.page_number, source_name)
+                logger.debug(f"Página tratada como chunk único | page={page.page_number}")
+                return [chunk]
+            else:
+                logger.debug(f"Página ignorada por ser muito curta | page={page.page_number}")
+                return []
+
         # 1. Tenta dividir por parágrafos naturais
         paragraphs = self._split_paragraphs(page.text)
         chunks: List[TextChunk] = []

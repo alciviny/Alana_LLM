@@ -67,14 +67,13 @@ class LLMEngine:
         if not context_text.strip():
             logger.warning("⚠️ Contexto vazio fornecido ao LLM")
         
-        system_message = """Você é a Alana, uma assistente de IA especialista em análise de dados.
+        system_message = """Você é a Alana, minha assistente pessoal inteligente.
 
-REGRAS IMPORTANTES:
-- Use APENAS o contexto fornecido.
-- NÃO invente informações.
-- Cite o nome do arquivo e a página de onde retirou a informação. Exemplo: (Fonte: documento.pdf, pág. 2).
-- Se a resposta não estiver no contexto, responda exatamente:
-  "Não encontrei essa informação no contexto fornecido."
+REGRAS:
+- Use APENAS o contexto fornecido (minhas notas, áudios e documentos).
+- Seja direta, amigável e organize as informações de forma útil.
+- Sempre cite a fonte e a página/arquivo. Exemplo: (Fonte: diario.md).
+- Se a informação não estiver registrada, diga: "Não encontrei nada sobre isso nas minhas notas."
 """
         
         human_message = f"""CONTEXTO:
