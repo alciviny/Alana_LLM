@@ -48,22 +48,35 @@ class EntityExtractor:
         Analisa o texto e extrai entidades e relações estruturadas.
         Retorna sempre um KnowledgeGraph válido.
         """
-        prompt = self._build_prompt()
+        if not text.strip():
+            return KnowledgeGraph(entities=[], relations=[])
+
+        system_prompt = self._build_prompt()
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": text},
+        ]
 
         try:
-            resposta_bruta = self.llm.generate_answer(
-                query=prompt,
-                context_text=text,
-                max_tokens=1024,
-            )
+            # A nova versão do llm_engine espera uma lista de `messages`
+            resposta_bruta = self.llm.generate_answer(messages=messages)
+
+            # Se o LLM falhar (ex: estouro de contexto), ele retorna uma string vazia.
+            if not resposta_bruta:
+                logger.warning("A extração de entidades não retornou conteúdo (possível erro no LLM). Pulando chunk.")
+                return KnowledgeGraph(entities=[], relations=[])
 
             logger.debug("Resposta bruta do LLM:\n%s", resposta_bruta)
 
             data = self._safe_json_load(resposta_bruta)
             return self._parse_graph(data)
 
+        except ValueError as e:
+            # Erro específico de parsing do JSON
+            logger.error(f"Erro de parsing de JSON na extração: {e}")
+            return KnowledgeGraph(entities=[], relations=[])
         except Exception as e:
-            logger.exception("Falha crítica na extração de entidades")
+            logger.exception("Falha crítica e inesperada na extração de entidades")
             return KnowledgeGraph(entities=[], relations=[])
 
     # =========================
