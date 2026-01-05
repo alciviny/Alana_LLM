@@ -1,4 +1,5 @@
 import logging
+import threading
 from typing import Optional
 from llama_cpp import Llama
 
@@ -34,8 +35,8 @@ class LLMEngine:
         """
 
         if n_gpu_layers is None:
-            # Fallback seguro (CPU)
-            n_gpu_layers = 0
+            # Fallback para uso máximo da GPU
+            n_gpu_layers = -1
 
         logger.info("🔄 Inicializando LLM local")
         logger.info(f"📦 Modelo: {model_path}")
@@ -49,60 +50,36 @@ class LLMEngine:
             seed=seed,
             verbose=False,
         )
+        self._lock = threading.Lock()
 
-    def generate_answer(
-        self,
-        query: str,
-        context_text: str,
-        max_tokens: int = 512,
-        temperature: float = 0.1,
-    ) -> str:
-        """
-        Gera resposta baseada em contexto usando o formato de chat do modelo.
-        """
-
-        if not query.strip():
-            raise ValueError("Query vazia")
-
-        if not context_text.strip():
-            logger.warning("⚠️ Contexto vazio fornecido ao LLM")
-        
-        system_message = """Você é a Alana, minha assistente pessoal inteligente.
-
-REGRAS:
-- Use APENAS o contexto fornecido (minhas notas, áudios e documentos).
-- Seja direta, amigável e organize as informações de forma útil.
-- Sempre cite a fonte e a página/arquivo. Exemplo: (Fonte: diario.md).
-- Se a informação não estiver registrada, diga: "Não encontrei nada sobre isso nas minhas notas."
-"""
-        
-        human_message = f"""CONTEXTO:
-{context_text}
-
-PERGUNTA:
-{query}
-"""
-        
-        messages = [
-            {"role": "system", "content": system_message},
-            {"role": "user", "content": human_message},
-        ]
-
+    def generate_answer(self, query: str = None, context_text: str = None, messages: list = None) -> str:
         try:
-            output = self.llm.create_chat_completion(
-                messages=messages,
-                max_tokens=max_tokens,
-                temperature=temperature,
-                top_p=0.9,
-                repeat_penalty=1.1,
-                stop=[
-                    "<|eot_id|>",
-                    "<|end_of_text|>",
-                ],
-            )
+            with self._lock:
+                # Se recebermos uma lista de mensagens (usado pelo EntityExtractor)
+                if messages:
+                    output = self.llm.create_chat_completion(
+                        messages=messages,
+                        temperature=0.1, # Baixa temperatura para extração de dados
+                        max_tokens=1024
+                    )
+                else:
+                    # Fallback para o modo de busca comum
+                    prompt = f"Contexto: {context_text}\n\nPergunta: {query}\nResposta:"
+                    output = self.llm.create_chat_completion(
+                        messages=[{"role": "user", "content": prompt}],
+                        max_tokens=1024
+                    )
 
             return output["choices"][0]["message"]["content"].strip()
 
+        except RuntimeError as e:
+            # Captura especificamente o erro de estouro de contexto ou erro de decode
+            if "llama_decode returned -1" in str(e):
+                logger.error("⚠️ Erro de Contexto: O bloco de texto é muito complexo ou longo para o LLM. Pulando este chunk...")
+            else:
+                logger.error(f"❌ Erro de Runtime no LLM: {e}")
+            return "" # Retorna vazio para o extrator ignorar e seguir em frente
+
         except Exception as e:
-            logger.exception("❌ Erro ao gerar resposta do LLM")
-            raise RuntimeError("Falha na geração da resposta") from e
+            logger.error(f"❌ Erro inesperado no LLM Engine: {e}")
+            return ""

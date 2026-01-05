@@ -43,7 +43,7 @@ class TextChunker:
         self,
         max_chars: int = 1000,
         overlap_chars: int = 200,
-        min_chars: int = 200
+        min_chars: int = 50
     ):
         if overlap_chars >= max_chars:
             raise ValueError("overlap_chars deve ser menor que max_chars")

@@ -3,6 +3,7 @@ import time
 from pathlib import Path
 from typing import List, Optional
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Adiciona o diretório 'src' ao sys.path para encontrar o pacote 'alana_system'
 src_path = Path(__file__).resolve().parent / 'src'
@@ -59,7 +60,7 @@ class IngestionPipeline:
         self.cleaner = TextCleaner()
         
         # --- Memória Vetorial (RAG) ---
-        self.chunker = TextChunker(max_chars=1000, overlap_chars=200)
+        self.chunker = TextChunker(max_chars=800, overlap_chars=200)
         self.embedder = TextEmbedder(device=embedder_device)
         self.vector_store = VectorStore(
             collection_name=collection_name, host="localhost", port=6333
@@ -143,53 +144,67 @@ class IngestionPipeline:
     # =====================================================
     def _process_document_pages(self, raw_pages: List[PageText], doc_name: str, source: str) -> None:
         """
-        Lógica unificada para processar páginas de texto de qualquer fonte.
-        Limpa, chunkeia, extrai entidades (KG) e indexa (RAG).
+        Lógica unificada para processar páginas.
+        Agora com processamento paralelo para a extração de grafos (Entity Extractor).
         """
         if not raw_pages:
             logger.warning(f"Documento {doc_name} ({source}) não contém páginas para processar.")
             return
             
+        # Limpeza inicial
         cleaned_pages = self.cleaner.clean_pages(raw_pages)
 
         # --- Etapa 1: Dividir em Chunks ---
-        # A criação dos chunks agora é o primeiro passo após a limpeza.
         logger.info(f"Iniciando chunking para: {doc_name}")
         chunks = self.chunker.chunk_pages(cleaned_pages, doc_name)
         if not chunks:
             logger.warning(f"Nenhum chunk gerado para o documento {doc_name}.")
             return
 
-        # --- Etapa 2: Extração de Grafo de Conhecimento (por Chunk) ---
-        # O loop agora itera sobre os chunks, não mais sobre as páginas.
-        logger.info(f"Iniciando extração de entidades para {len(chunks)} chunks...")
-        for chunk in chunks:
-            self._process_entities(
-                text=chunk.text,
-                doc_name=chunk.source_name,
-                page_number=chunk.page_number  # O chunk mantém a página original
-            )
+        # --- Etapa 2: Extração Paralela de Grafo de Conhecimento ---
+        logger.info(f"Iniciando extração PARALELA de entidades para {len(chunks)} chunks...")
+        
+        # max_workers define quantos chunks o LLM tentará processar ao mesmo tempo.
+        # Se você tem uma GPU potente, 2 ou 3 é um bom número inicial.
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            # Criamos as tarefas para cada chunk
+            futures = [
+                executor.submit(
+                    self._process_entities,
+                    chunk.text,
+                    chunk.source_name,
+                    chunk.page_number
+                )
+                for chunk in chunks
+            ]
+
+            # Monitoramos o progresso e capturamos possíveis erros
+            for future in as_completed(futures):
+                try:
+                    future.result() # Isso garante que exceções nas threads apareçam no log
+                except Exception as exc:
+                    logger.error(f"Erro na extração paralela de um chunk em {doc_name}: {exc}")
 
         # --- Etapa 3: Indexação Vetorial (RAG) ---
         logger.info(f"Iniciando indexação vetorial para {len(chunks)} chunks...")
         embedded_chunks = self.embedder.embed_chunks(chunks)
         self.vector_store.upsert_embeddings(embedded_chunks)
         
-        logger.info(f"'{doc_name}' ({source}) processado: {len(chunks)} chunks indexados e entidades extraídas.")
+        logger.info(f"'{doc_name}' ({source}) concluído com sucesso.")
 
     def _process_entities(self, text: str, doc_name: str, page_number: int) -> None:
         """
         Extrai conhecimento e persiste no banco de dados SQLite.
         """
         if not text.strip():
-            logger.debug(f"Página de texto vazia, pulando extração de entidades | doc={doc_name} page={page_number}")
             return
-            
+
         # 1. Extração semântica via LLM
+        # Aqui o LLM trabalha pesado
         graph = self.entity_extractor.extract_graph(text)
 
         if graph.entities or graph.relations:
-            # 2. Persistência na memória de longo prazo (Grafo)
+            # 2. Persistência no SQLite
             self.graph_store.add_knowledge(
                 graph=graph,
                 source_doc=doc_name,
@@ -211,7 +226,7 @@ def main():
     RAW_DATA_DIR = "data/raw"
     KNOWLEDGE_BASE_NAME = "alana_knowledge_base"
     WHISPER_MODEL = "small"
-    EMBEDDER_DEVICE = "cpu"  # ou "cuda"
+    EMBEDDER_DEVICE = "cuda"  # ou "cuda"
     EXTRACTION_MODEL = "models/Meta-Llama-3-8B-Instruct-Q4_K_M.gguf"
 
     # Verifica se o diretório de dados brutos existe
